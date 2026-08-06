@@ -1,22 +1,24 @@
 package main
 
 import (
+	"fmt"
 	"log"
-	"os"
-
-	"github.com/deniskhamzin/go_final_project/internal/server"
+	"net/http"
 )
 
 func main() {
-	// creating new logger
-	logger := log.New(os.Stdout, "http-server", log.LstdFlags|log.Lshortfile)
-	// creating new http-server using current logger
-	Server := server.NewServer(logger)
+	webDir := "./web"
 
-	// server starts listening to port 7540
-	err := Server.HttpServer.ListenAndServe()
-	// logging errors
-	if err != nil {
-		logger.Fatal("HTTP server didn't start: ", err)
+	// Создаем файловый сервер
+	fileServer := http.FileServer(http.Dir(webDir))
+
+	// Обработчик для всех запросов
+	http.Handle("/", fileServer)
+
+	// Запускаем сервер на порту 7540
+	fmt.Println("Сервер запущен на http://localhost:7540")
+
+	if err := http.ListenAndServe(":7540", nil); err != nil {
+		log.Fatal("Ошибка запуска сервера:", err)
 	}
 }
