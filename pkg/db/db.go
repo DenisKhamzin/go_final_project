@@ -15,10 +15,9 @@ var schema string = `CREATE TABLE IF NOT EXISTS scheduler (
 		date CHAR(8) NOT NULL DEFAULT "",
 		title VARCHAR DAFAULT "",
 		comment TEXT DEFAULT "",
-		repeat VARCHAR(128) DEFAULT "")`
+		repeat VARCHAR(128) DEFAULT "");`
 
-var index string = `CREATE INDEX IF NOT EXIST id_scheduler_date
-	ON scheduler (date)`
+var index string = `CREATE INDEX IF NOT EXIST idx_scheduler_date ON scheduler (date);`
 
 func Init(dbName string) error {
 	_, err := os.Stat(dbName)
@@ -27,7 +26,7 @@ func Init(dbName string) error {
 		install = true
 	}
 
-	db, err := sql.Open("sqlite3", dbName)
+	db, err := sql.Open("sqlite", dbName)
 	if err != nil {
 		log.Fatal("Ошибка создания (открытия) базы данных:", err)
 		return err
