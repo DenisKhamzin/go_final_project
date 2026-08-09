@@ -4,10 +4,18 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
+	"github.com/deniskhamzin/go_final_project/pkg/db"
 )
 
 func main() {
 	webDir := "./web"
+	dbFile := "scheduler.db"
+
+	err := db.Init(dbFile)
+	if err != nil {
+		log.Fatal("Ошибка создания (открытия) Базы Данных:", err)
+	}
 
 	// Создаем файловый сервер
 	fileServer := http.FileServer(http.Dir(webDir))
