@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	//"github.com/deniskhamzin/go_final_project/pkg/nextdate"
 )
 
 func Init(mux *http.ServeMux) {
@@ -15,7 +14,13 @@ func Init(mux *http.ServeMux) {
 }
 
 func nextDayHandler(w http.ResponseWriter, r *http.Request) {
-	// 1. Получаем и парсим параметр now
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("Panic в nextDayHandler: %v", err)
+			http.Error(w, "Внутренняя ошибка сервера", http.StatusInternalServerError)
+		}
+	}()
+
 	nowStr := r.URL.Query().Get("now")
 	var nowTime time.Time
 	if nowStr == "" {
@@ -29,80 +34,98 @@ func nextDayHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 2. Получаем остальные параметры
 	date := r.URL.Query().Get("date")
 	repeat := r.URL.Query().Get("repeat")
 
-	// 3. Вызываем бизнес-логику
-	result, err := nextDate(nowTime, date, repeat)
-	if err != nil {
-		// Логируем ошибку (но НЕ убиваем сервер!)
-		log.Printf("Ошибка в nextDate: %v", err)
-		http.Error(w, "Невозможно вычислить следующую дату", http.StatusBadRequest)
+	if date == "" {
+		http.Error(w, "Параметр date обязателен", http.StatusBadRequest)
 		return
 	}
 
-	// 4. Отправляем успешный ответ
+	if repeat == "" {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(""))
+		return
+	}
+
+	result, err := nextDate(nowTime, date, repeat)
+	if err != nil {
+		log.Printf("Ошибка в nextDate: %v", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(result))
 }
 
 func nextDate(now time.Time, dstart string, repeat string) (string, error) {
-	// проверка на корректное входное значение dstart
 	startDate, err := time.Parse("20060102", dstart)
 	if err != nil {
 		log.Printf("Неверный формат dstart: %v", err)
-		return "", err
+		return "", errors.New("неверный формат даты")
 	}
-	// проверка на корректное значение repeat
+
+	if repeat == "" {
+		return "", errors.New("repeat не может быть пустым")
+	}
+
 	slice := strings.Split(repeat, " ")
+	if len(slice) == 0 {
+		return "", errors.New("пустой repeat")
+	}
+
 	if slice[0] != "d" && slice[0] != "y" {
-		err = errors.New("Ошибка в repeat")
-		log.Printf("Неверный индекс в repeat: %v", err)
-		return "", err
+		log.Printf("Неверный тип в repeat: %s", slice[0])
+		return "", errors.New("неверный тип в repeat")
 	}
-	// проверка на корректность в случае значения `y`
-	if slice[0] == "y" && len(slice) != 1 {
-		err = errors.New("Значение после `y` в repeat")
-		log.Printf("Неверное значение после `y` в repeat: %v", err)
-		return "", err
-	}
-	// проверка на корректность в случае значения `d`
-	if slice[0] == "d" && len(slice) != 2 {
-		err = errors.New("Значение после `d` в repeat")
-		log.Printf("Неверное значение после `d` в repeat: %v", err)
-		return "", err
-	}
-	// проверка на корректность числа после `d` в repeat
-	num, err := strconv.Atoi(slice[1])
-	if err != nil {
-		log.Printf("невозможно конвертировать в число: %v", err)
-		return "", err
-	}
-	// проверка чила на <= 400 по условию задачи
-	if num < 1 || num > 400 {
-		err = errors.New("Некорректное число в repeat после `d`")
-		log.Printf("Некорректный repeat: %v", err)
-		return "", err
-	}
-	// вычисляем следующую дату для `y` и для `d`
+
 	if slice[0] == "y" {
-		for afterNow(startDate, now) {
+		if len(slice) != 1 {
+			log.Printf("Неверное значение после y в repeat: %v", slice)
+			return "", errors.New("неверное значение после y")
+		}
+
+		// ВАЖНО: сначала прибавляем год, потом проверяем
+		startDate = startDate.AddDate(1, 0, 0)
+
+		// Теперь проверяем, что дата > now
+		for !startDate.After(now) {
 			startDate = startDate.AddDate(1, 0, 0)
 		}
-	} else {
-		for afterNow(startDate, now) {
+
+		nextDate := startDate.Format("20060102")
+		return nextDate, nil
+	}
+
+	if slice[0] == "d" {
+		if len(slice) != 2 {
+			log.Printf("Неверное значение после d в repeat: %v", slice)
+			return "", errors.New("неверное значение после d")
+		}
+
+		num, err := strconv.Atoi(slice[1])
+		if err != nil {
+			log.Printf("Невозможно конвертировать в число: %v", err)
+			return "", errors.New("неверное число в repeat")
+		}
+
+		if num < 1 || num > 400 {
+			log.Printf("Некорректное число в repeat: %d", num)
+			return "", errors.New("число должно быть от 1 до 400")
+		}
+
+		// ВАЖНО: сначала прибавляем дни, потом проверяем
+		startDate = startDate.AddDate(0, 0, num)
+
+		// Теперь проверяем, что дата > now
+		for !startDate.After(now) {
 			startDate = startDate.AddDate(0, 0, num)
 		}
+
+		nextDate := startDate.Format("20060102")
+		return nextDate, nil
 	}
-	nextDate := startDate.Format("20060102")
-	return nextDate, nil
-}
 
-func afterNow(date, now time.Time) bool {
-	return date.Before(now)
+	return "", errors.New("неизвестный тип repeat")
 }
-
-//func afterNow(date, now time.Time) bool {
-//    return date.Before(now) || date.Equal(now) // нужно добавлять пока дата <= now
-//}
