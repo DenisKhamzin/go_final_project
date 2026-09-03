@@ -53,3 +53,24 @@ func Init(dbName string) error {
 	}
 	return nil
 }
+
+func TaskAder(title, date, comment, repeat string) (int64, error) {
+	db, err := sql.Open("sqlite3", "scheduler.db")
+	if err != nil {
+		log.Fatal("Ошибка создания (открытия) базы данных:", err)
+		return 0, err
+	}
+	defer db.Close()
+
+	query := `INSERT INTO scheduler (date, title, comment, repeat) VALUES (?, ?, ?, ?)`
+	result, err := db.Exec(query, date, title, comment, repeat)
+	if err != nil {
+		return 0, err
+	}
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	return id, nil
+}

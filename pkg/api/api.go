@@ -1,16 +1,17 @@
 package api
 
 import (
-	"errors"
+	"encoding/json"
 	"log"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
+
+	"github.com/deniskhamzin/go_final_project/pkg/db"
 )
 
 func Init(mux *http.ServeMux) {
 	mux.HandleFunc("/api/nextdate", nextDayHandler)
+	mux.HandleFunc("POST /api/task", taskAddHandler)
 }
 
 func nextDayHandler(w http.ResponseWriter, r *http.Request) {
@@ -59,73 +60,88 @@ func nextDayHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(result))
 }
 
-func nextDate(now time.Time, dstart string, repeat string) (string, error) {
-	startDate, err := time.Parse("20060102", dstart)
+func taskAddHandler(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if err := recover(); err != nil {
+			log.Printf("Panic в taskAdder: %v", err)
+			http.Error(w, "Внутренняя ошибка сервера", http.StatusInternalServerError)
+		}
+	}()
+
+	var task db.Task
+
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+	// проверяем, проситался ли JSON
+	err := decoder.Decode(&task)
 	if err != nil {
-		log.Printf("Неверный формат dstart: %v", err)
-		return "", errors.New("неверный формат даты")
+		resp := db.ErrorAdderResponse{Error: "ошибка декодирования входящего json"}
+		err = writeError(w, resp)
+		return
+	}
+	// проверяем, что title не пустой
+	if task.Title == "" {
+		resp := db.ErrorAdderResponse{Error: "поле title должно быть заполнено"}
+		err = writeError(w, resp)
+		return
+	}
+	// если строка date не указана или это пустая строка - берем сегодняшнее число
+	if task.Date == "" {
+		task.Date = time.Now().Format("20060102")
 	}
 
-	if repeat == "" {
-		return "", errors.New("repeat не может быть пустым")
+	// вычисляем сегодняшнее число в формате time.Time (дата корректно распознается)
+	dateTask, err := time.Parse("20060102", task.Date)
+	if err != nil {
+		resp := db.ErrorAdderResponse{Error: "ошибка формата даты"}
+		err = writeError(w, resp)
+		return
+	}
+	// проверяем, что дата задачи позже сегодняшнего числа
+	if dateTask.Before(time.Now()) {
+		if task.Repeat == "" {
+			task.Date = time.Now().Format("20060102")
+		} else {
+			task.Date, err = nextDate(time.Now(), task.Date, task.Repeat)
+			if err != nil {
+				resp := db.ErrorAdderResponse{Error: "Некорректный repeat"}
+				err = writeError(w, resp)
+				return
+			}
+		}
 	}
 
-	slice := strings.Split(repeat, " ")
-	if len(slice) == 0 {
-		return "", errors.New("пустой repeat")
+	// отправляем запрос в бд
+
+	id, err := db.AddTask(&task)
+
+	if id == 0 {
+		resp := db.ErrorAdderResponse{Error: "ошибка создания json"}
+		err = writeError(w, resp)
+		return
 	}
+	resp := db.IdAdderResponse{ID: id}
+	err = writeID(w, resp)
+}
 
-	if slice[0] != "d" && slice[0] != "y" {
-		log.Printf("Неверный тип в repeat: %s", slice[0])
-		return "", errors.New("неверный тип в repeat")
-	}
+func writeID(w http.ResponseWriter, id db.IdAdderResponse) error {
+	// 1. Устанавливаем заголовок Content-Type
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 
-	if slice[0] == "y" {
-		if len(slice) != 1 {
-			log.Printf("Неверное значение после y в repeat: %v", slice)
-			return "", errors.New("неверное значение после y")
-		}
+	// 2. Устанавливаем HTTP статус
+	w.WriteHeader(http.StatusOK)
 
-		// ВАЖНО: сначала прибавляем год, потом проверяем
-		startDate = startDate.AddDate(1, 0, 0)
+	// 3. Сериализуем и отправляем JSON
+	return json.NewEncoder(w).Encode(id)
+}
 
-		// Теперь проверяем, что дата > now
-		for !startDate.After(now) {
-			startDate = startDate.AddDate(1, 0, 0)
-		}
+func writeError(w http.ResponseWriter, err db.ErrorAdderResponse) error {
+	// 1. Устанавливаем заголовок Content-Type
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 
-		nextDate := startDate.Format("20060102")
-		return nextDate, nil
-	}
+	// 2. Устанавливаем HTTP статус
+	w.WriteHeader(http.StatusBadRequest)
 
-	if slice[0] == "d" {
-		if len(slice) != 2 {
-			log.Printf("Неверное значение после d в repeat: %v", slice)
-			return "", errors.New("неверное значение после d")
-		}
-
-		num, err := strconv.Atoi(slice[1])
-		if err != nil {
-			log.Printf("Невозможно конвертировать в число: %v", err)
-			return "", errors.New("неверное число в repeat")
-		}
-
-		if num < 1 || num > 400 {
-			log.Printf("Некорректное число в repeat: %d", num)
-			return "", errors.New("число должно быть от 1 до 400")
-		}
-
-		// ВАЖНО: сначала прибавляем дни, потом проверяем
-		startDate = startDate.AddDate(0, 0, num)
-
-		// Теперь проверяем, что дата > now
-		for !startDate.After(now) {
-			startDate = startDate.AddDate(0, 0, num)
-		}
-
-		nextDate := startDate.Format("20060102")
-		return nextDate, nil
-	}
-
-	return "", errors.New("неизвестный тип repeat")
+	// 3. Сериализуем и отправляем JSON
+	return json.NewEncoder(w).Encode(err)
 }
