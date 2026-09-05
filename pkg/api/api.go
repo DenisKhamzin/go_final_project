@@ -65,6 +65,9 @@ func taskAddHandler(w http.ResponseWriter, r *http.Request) {
 		if err := recover(); err != nil {
 			log.Printf("Panic в taskAdder: %v", err)
 			http.Error(w, "Внутренняя ошибка сервера", http.StatusInternalServerError)
+			//resp := db.ErrorAdderResponse{Error: "Внутренняя ошибка сервера"}
+			writeError(w, "Внутренняя ошибка сервера")
+			return
 		}
 	}()
 
@@ -75,39 +78,54 @@ func taskAddHandler(w http.ResponseWriter, r *http.Request) {
 	// проверяем, проситался ли JSON
 	err := decoder.Decode(&task)
 	if err != nil {
-		resp := db.ErrorAdderResponse{Error: "ошибка декодирования входящего json"}
-		err = writeError(w, resp)
+		//resp := db.ErrorAdderResponse{Error: "ошибка декодирования входящего json"}
+		//err = writeError(w, resp)
+		//return
+		writeError(w, "Неверный формат json")
 		return
 	}
 	// проверяем, что title не пустой
 	if task.Title == "" {
-		resp := db.ErrorAdderResponse{Error: "поле title должно быть заполнено"}
-		err = writeError(w, resp)
+		writeError(w, "Title не может быть пустым")
 		return
 	}
 	// если строка date не указана или это пустая строка - берем сегодняшнее число
-	if task.Date == "" {
+	if task.Date == "" || task.Date == "today" {
 		task.Date = time.Now().Format("20060102")
 	}
 
 	// вычисляем сегодняшнее число в формате time.Time (дата корректно распознается)
-	dateTask, err := time.Parse("20060102", task.Date)
+	_, err = time.Parse("20060102", task.Date)
 	if err != nil {
-		resp := db.ErrorAdderResponse{Error: "ошибка формата даты"}
-		err = writeError(w, resp)
+		writeError(w, "Неверный формат даты")
 		return
 	}
-	// проверяем, что дата задачи позже сегодняшнего числа
-	if dateTask.Before(time.Now()) {
-		if task.Repeat == "" {
-			task.Date = time.Now().Format("20060102")
-		} else {
-			task.Date, err = nextDate(time.Now(), task.Date, task.Repeat)
-			if err != nil {
-				resp := db.ErrorAdderResponse{Error: "Некорректный repeat"}
-				err = writeError(w, resp)
-				return
-			}
+
+	// Автокоррекция даты в прошлом на сегодняшнюю
+	today := time.Now().Format("20060102")
+	if task.Date < today {
+		task.Date = today
+	}
+
+	//	// проверяем, что дата задачи позже сегодняшнего числа
+	//	if dateTask.Before(time.Now()) {
+	//		if task.Repeat == "" {
+	//			task.Date = time.Now().Format("20060102")
+	//		} else {
+	//			task.Date, err = nextDate(time.Now(), task.Date, task.Repeat)
+	//			if err != nil {
+	//				resp := db.ErrorAdderResponse{Error: "Некорректный repeat"}
+	//				err = writeError(w, resp)
+	//				return
+	//			}
+	//		}
+	//	}
+
+	// проверяем правило repeat
+	if task.Repeat != "" {
+		if _, err := nextDate(time.Now(), task.Date, task.Repeat); err != nil {
+			writeError(w, "Неверное правило повторения")
+			return
 		}
 	}
 
@@ -116,15 +134,14 @@ func taskAddHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := db.AddTask(&task)
 
 	if id == 0 {
-		resp := db.ErrorAdderResponse{Error: "ошибка создания json"}
-		err = writeError(w, resp)
+		writeError(w, "Ошибка сохранения задачи")
 		return
 	}
-	resp := db.IdAdderResponse{ID: id}
-	err = writeID(w, resp)
+	//resp := db.IdAdderResponse{ID: id}
+	writeID(w, id)
 }
 
-func writeID(w http.ResponseWriter, id db.IdAdderResponse) error {
+func writeID(w http.ResponseWriter, id int64) {
 	// 1. Устанавливаем заголовок Content-Type
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 
@@ -132,16 +149,14 @@ func writeID(w http.ResponseWriter, id db.IdAdderResponse) error {
 	w.WriteHeader(http.StatusOK)
 
 	// 3. Сериализуем и отправляем JSON
-	return json.NewEncoder(w).Encode(id)
+	json.NewEncoder(w).Encode(map[string]int64{"id": id})
 }
 
-func writeError(w http.ResponseWriter, err db.ErrorAdderResponse) error {
+func writeError(w http.ResponseWriter, err string) {
 	// 1. Устанавливаем заголовок Content-Type
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-
 	// 2. Устанавливаем HTTP статус
 	w.WriteHeader(http.StatusBadRequest)
-
 	// 3. Сериализуем и отправляем JSON
-	return json.NewEncoder(w).Encode(err)
+	json.NewEncoder(w).Encode(map[string]string{"error": err})
 }
