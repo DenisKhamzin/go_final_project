@@ -1,9 +1,11 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/deniskhamzin/go_final_project/pkg/db"
@@ -12,6 +14,8 @@ import (
 func Init(mux *http.ServeMux) {
 	mux.HandleFunc("/api/nextdate", nextDayHandler)
 	mux.HandleFunc("POST /api/task", taskAddHandler)
+	mux.HandleFunc("GET /api/tasks", getTasksHandler)
+	mux.HandleFunc("GET /api/task", getTaskHandler)
 }
 
 func nextDayHandler(w http.ResponseWriter, r *http.Request) {
@@ -107,20 +111,6 @@ func taskAddHandler(w http.ResponseWriter, r *http.Request) {
 		task.Date = today
 	}
 
-	//	// проверяем, что дата задачи позже сегодняшнего числа
-	//	if dateTask.Before(time.Now()) {
-	//		if task.Repeat == "" {
-	//			task.Date = time.Now().Format("20060102")
-	//		} else {
-	//			task.Date, err = nextDate(time.Now(), task.Date, task.Repeat)
-	//			if err != nil {
-	//				resp := db.ErrorAdderResponse{Error: "Некорректный repeat"}
-	//				err = writeError(w, resp)
-	//				return
-	//			}
-	//		}
-	//	}
-
 	// проверяем правило repeat
 	if task.Repeat != "" {
 		if _, err := nextDate(time.Now(), task.Date, task.Repeat); err != nil {
@@ -152,6 +142,7 @@ func writeID(w http.ResponseWriter, id int64) {
 	w.WriteHeader(http.StatusOK)
 
 	// 3. Сериализуем и отправляем JSON
+	//log.Printf("id %d", id)
 	json.NewEncoder(w).Encode(map[string]int64{"id": id})
 }
 
@@ -162,4 +153,71 @@ func writeError(w http.ResponseWriter, err string) {
 	w.WriteHeader(http.StatusBadRequest)
 	// 3. Сериализуем и отправляем JSON
 	json.NewEncoder(w).Encode(map[string]string{"error": err})
+}
+
+func getTasksHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Метод не разрешен", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var query string
+	var args []interface{}
+
+	query = `SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date`
+
+	rows, err := db.DB.Query(query, args...)
+	if err != nil {
+		http.Error(w, "Ошибка запроса к БД", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	tasks := make([]db.Task, 0)
+	for rows.Next() {
+		var task db.Task
+		var id int64
+		err := rows.Scan(&id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
+		if err != nil {
+			http.Error(w, "Ошибка чтения данных", http.StatusInternalServerError)
+			return
+		}
+		task.ID = strconv.FormatInt(id, 10)
+		tasks = append(tasks, task)
+	}
+
+	response := map[string]interface{}{"tasks": tasks}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+func getTaskHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		writeError(w, "ID не указан")
+		return
+	}
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, "Неверный ID")
+		return
+	}
+
+	var task db.Task
+	var id64 int64
+	err = db.DB.QueryRow(
+		"SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?",
+		id,
+	).Scan(&id64, &task.Date, &task.Title, &task.Comment, &task.Repeat)
+	if err == sql.ErrNoRows {
+		writeError(w, "Задача не найдена")
+		return
+	}
+	if err != nil {
+		writeError(w, "Ошибка получения задачи")
+		return
+	}
+	task.ID = strconv.FormatInt(id64, 10)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(task)
 }

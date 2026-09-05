@@ -2,8 +2,6 @@ package db
 
 import (
 	"database/sql"
-	// "fmt"
-	// "time"
 	"log"
 	"os"
 
@@ -52,6 +50,5 @@ func Init(dbName string) error {
 			return err
 		}
 	}
-	//return DB.Ping()
 	return err
 }

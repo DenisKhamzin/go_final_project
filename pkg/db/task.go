@@ -7,11 +7,3 @@ type Task struct {
 	Comment string `json:"comment,omitempty"`
 	Repeat  string `json:"repeat,omitempty"`
 }
-
-//type ErrorAdderResponse struct {
-//	Error string `json:"error"`
-//}
-
-//type IdAdderResponse struct {
-//	ID int64 `json:"id"`
-//}
