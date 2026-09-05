@@ -2,9 +2,11 @@ package db
 
 //"database/sql"
 //"log"
+//import "fmt"
 
 func AddTask(task *Task) (int64, error) {
 	//db, err := sql.Open("sqlite", "scheduler")
+
 	var id int64
 	//if err != nil {
 	//	log.Fatal("Ошибка создания (открытия) базы данных:", err)
@@ -12,9 +14,13 @@ func AddTask(task *Task) (int64, error) {
 	//}
 	//defer db.Close()
 	query := `INSERT INTO scheduler (date, title, comment, repeat) VALUES (?, ?, ?, ?)`
-	_, err := DB.Exec(query, task.Date, task.Title, task.Comment, task.Repeat)
+	res, err := DB.Exec(query, task.Date, task.Title, task.Comment, task.Repeat)
 	if err != nil {
 		//id, err = res.LastInsertId()
+		return 0, err
+	}
+	id, err = res.LastInsertId()
+	if err != nil {
 		return 0, err
 	}
 	return id, nil

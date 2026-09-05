@@ -133,6 +133,9 @@ func taskAddHandler(w http.ResponseWriter, r *http.Request) {
 
 	id, err := db.AddTask(&task)
 
+	if err != nil {
+		log.Printf("Ошибка добавления задачи: %w", err)
+	}
 	if id == 0 {
 		writeError(w, "Ошибка сохранения задачи")
 		return
