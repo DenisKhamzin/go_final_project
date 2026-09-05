@@ -16,6 +16,10 @@ func Init(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/task", taskAddHandler)
 	mux.HandleFunc("GET /api/tasks", getTasksHandler)
 	mux.HandleFunc("GET /api/task", getTaskHandler)
+	mux.HandleFunc("PUT /api/task", updateTaskHandler)
+	mux.HandleFunc("POST /api/task/done", doneTaskHandler)
+	mux.HandleFunc("DELETE /api/task", deleteTaskHandler)
+
 }
 
 func nextDayHandler(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +128,7 @@ func taskAddHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := db.AddTask(&task)
 
 	if err != nil {
-		log.Printf("Ошибка добавления задачи: %w", err)
+		log.Printf("Ошибка добавления задачи: %v", err)
 	}
 	if id == 0 {
 		writeError(w, "Ошибка сохранения задачи")
@@ -220,4 +224,146 @@ func getTaskHandler(w http.ResponseWriter, r *http.Request) {
 	task.ID = strconv.FormatInt(id64, 10)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(task)
+}
+
+func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
+	var task db.Task
+	err := json.NewDecoder(r.Body).Decode(&task)
+	if err != nil {
+		writeError(w, "Неверный формат JSON")
+		return
+	}
+	if task.ID == "" {
+		writeError(w, "ID не указан")
+		return
+	}
+	id, err := strconv.ParseInt(task.ID, 10, 64)
+	if err != nil {
+		writeError(w, "Неверный ID")
+		return
+	}
+
+	var exists bool
+	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM scheduler WHERE id = ?)", id).Scan(&exists)
+	if err != nil || !exists {
+		writeError(w, "Задача не найдена")
+		return
+	}
+
+	if task.Title == "" {
+		writeError(w, "Заголовок не может быть пустым")
+		return
+	}
+	if task.Date == "" || task.Date == "today" {
+		task.Date = time.Now().Format("20060102")
+	} else {
+		if _, err := time.Parse("20060102", task.Date); err != nil {
+			writeError(w, "Неверный формат даты")
+			return
+		}
+	}
+	if task.Repeat != "" {
+		if _, err := nextDate(time.Now(), task.Date, task.Repeat); err != nil {
+			writeError(w, "Неверное правило повторения")
+			return
+		}
+	}
+
+	// Автокоррекция даты в прошлом на сегодняшнюю
+	today := time.Now().Format("20060102")
+	if task.Date < today {
+		task.Date = today
+	}
+
+	_, err = db.DB.Exec(
+		"UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?",
+		task.Date, task.Title, task.Comment, task.Repeat, id,
+	)
+	if err != nil {
+		writeError(w, "Ошибка обновления задачи")
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{})
+}
+
+func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Метод не разрешен", http.StatusMethodNotAllowed)
+		return
+	}
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		writeError(w, "ID не указан")
+		return
+	}
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, "Неверный ID")
+		return
+	}
+
+	var task db.Task
+	var id64 int64
+	err = db.DB.QueryRow(
+		"SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?",
+		id,
+	).Scan(&id64, &task.Date, &task.Title, &task.Comment, &task.Repeat)
+	if err == sql.ErrNoRows {
+		writeError(w, "Задача не найдена")
+		return
+	}
+	if err != nil {
+		writeError(w, "Ошибка получения задачи")
+		return
+	}
+
+	if task.Repeat == "" {
+		_, err = db.DB.Exec("DELETE FROM scheduler WHERE id = ?", id)
+		if err != nil {
+			writeError(w, "Ошибка удаления задачи")
+			return
+		}
+	} else {
+		//now := time.Now().Format("20060102")
+		nextDate, err := nextDate(time.Now(), task.Date, task.Repeat)
+		if err != nil {
+			writeError(w, "Ошибка вычисления следующей даты")
+			return
+		}
+		_, err = db.DB.Exec("UPDATE scheduler SET date = ? WHERE id = ?", nextDate, id)
+		if err != nil {
+			writeError(w, "Ошибка обновления задачи")
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{})
+}
+
+func deleteTaskHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		writeError(w, "ID не указан")
+		return
+	}
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeError(w, "Неверный ID")
+		return
+	}
+	result, err := db.DB.Exec("DELETE FROM scheduler WHERE id = ?", id)
+	if err != nil {
+		writeError(w, "Ошибка удаления задачи")
+		return
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		writeError(w, "Задача не найдена")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{})
 }
