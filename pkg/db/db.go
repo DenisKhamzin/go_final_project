@@ -15,8 +15,16 @@ var schema string = `CREATE TABLE IF NOT EXISTS scheduler (
 		comment TEXT DEFAULT "",
 		repeat VARCHAR(128) DEFAULT "");`
 
-var index string = `CREATE INDEX IF NOT EXIST idx_scheduler_date ON scheduler (date);`
+var index string = `CREATE INDEX IF NOT EXISTS idx_scheduler_date ON scheduler (date);`
 var DB *sql.DB
+
+type Task struct {
+	ID      string `json:"id,omitempty"`
+	Date    string `json:"date"`
+	Title   string `json:"title"`
+	Comment string `json:"comment,omitempty"`
+	Repeat  string `json:"repeat,omitempty"`
+}
 
 func Init(dbName string) error {
 	_, err := os.Stat(dbName)
