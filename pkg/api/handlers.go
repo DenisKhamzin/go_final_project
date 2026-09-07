@@ -18,7 +18,7 @@ func nextDayHandler(w http.ResponseWriter, r *http.Request) {
 		nowTime = time.Now()
 	} else {
 		var err error
-		nowTime, err = time.Parse("20060102", nowStr)
+		nowTime, err = time.Parse(db.DateFormat, nowStr)
 		if err != nil {
 			http.Error(w, "Неверный формат параметра now, ожидается YYYYMMDD", http.StatusBadRequest)
 			return
@@ -59,14 +59,14 @@ func taskAddHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if task.Date == "" || task.Date == "today" {
-		task.Date = time.Now().Format("20060102")
+		task.Date = time.Now().Format(db.DateFormat)
 	}
-	_, err = time.Parse("20060102", task.Date)
+	_, err = time.Parse(db.DateFormat, task.Date)
 	if err != nil {
 		writeError(w, "Неверный формат даты")
 		return
 	}
-	today := time.Now().Format("20060102")
+	today := time.Now().Format(db.DateFormat)
 	if task.Date < today {
 		task.Date = today
 	}
@@ -160,6 +160,10 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeError(w, "Поддерживается только метод POST")
+		return
+	}
 	idStr := r.URL.Query().Get("id")
 	if idStr == "" {
 		writeError(w, "ID не указан")

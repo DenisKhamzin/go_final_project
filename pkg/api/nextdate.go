@@ -6,10 +6,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/deniskhamzin/go_final_project/pkg/db"
 )
 
 func nextDate(now time.Time, dstart string, repeat string) (string, error) {
-	startDate, err := time.Parse("20060102", dstart)
+	startDate, err := time.Parse(db.DateFormat, dstart)
 	if err != nil {
 		log.Printf("Неверный формат dstart: %v", err)
 		return "", errors.New("неверный формат даты")
@@ -43,7 +45,7 @@ func nextDate(now time.Time, dstart string, repeat string) (string, error) {
 			startDate = startDate.AddDate(1, 0, 0)
 		}
 
-		nextDate := startDate.Format("20060102")
+		nextDate := startDate.Format(db.DateFormat)
 		return nextDate, nil
 	}
 
@@ -72,7 +74,7 @@ func nextDate(now time.Time, dstart string, repeat string) (string, error) {
 			startDate = startDate.AddDate(0, 0, num)
 		}
 
-		nextDate := startDate.Format("20060102")
+		nextDate := startDate.Format(db.DateFormat)
 		return nextDate, nil
 	}
 
