@@ -3,7 +3,6 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
-	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -20,14 +19,14 @@ func nextDayHandler(w http.ResponseWriter, r *http.Request) {
 		var err error
 		nowTime, err = time.Parse(db.DateFormat, nowStr)
 		if err != nil {
-			http.Error(w, "Неверный формат параметра now, ожидается YYYYMMDD", http.StatusBadRequest)
+			writeError(w, "Неверный формат параметра now, ожидается YYYYMMDD")
 			return
 		}
 	}
 	date := r.URL.Query().Get("date")
 	repeat := r.URL.Query().Get("repeat")
 	if date == "" {
-		http.Error(w, "Параметр date обязателен", http.StatusBadRequest)
+		writeError(w, "Параметр date обязателен")
 		return
 	}
 	if repeat == "" {
@@ -37,8 +36,7 @@ func nextDayHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := nextDate(nowTime, date, repeat)
 	if err != nil {
-		log.Printf("Ошибка в nextDate: %v", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		writeError(w, "Ошибка в вычислении next date")
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -82,7 +80,8 @@ func taskAddHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := db.AddTask(&task)
 
 	if err != nil {
-		log.Printf("Ошибка добавления задачи: %v", err)
+		writeError(w, "Ошибка добавления задачи")
+		return
 	}
 	if id == 0 {
 		writeError(w, "Ошибка сохранения задачи")
@@ -105,7 +104,6 @@ func getTasksHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Ошибка запроса к БД", http.StatusInternalServerError)
 		return
 	}
-	// ?
 	response := map[string][]db.Task{"tasks": tasks}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
