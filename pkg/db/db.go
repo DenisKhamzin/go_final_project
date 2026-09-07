@@ -8,6 +8,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+const DateFormat string = "20060102"
+
 var schema string = `CREATE TABLE IF NOT EXISTS scheduler (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		date CHAR(8) NOT NULL DEFAULT "",
