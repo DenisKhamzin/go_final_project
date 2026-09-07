@@ -6,13 +6,17 @@ import (
 	"time"
 )
 
+// функция для добавления задачи
 func AddTask(task *Task) (int64, error) {
 	var id int64
+	// SQL-запрос в БД
 	query := `INSERT INTO scheduler (date, title, comment, repeat) VALUES (?, ?, ?, ?)`
+	// выполнение SQL-запроса
 	res, err := DB.Exec(query, task.Date, task.Title, task.Comment, task.Repeat)
 	if err != nil {
 		return 0, err
 	}
+	// возврат id для созданной записи в БД
 	id, err = res.LastInsertId()
 	if err != nil {
 		return 0, err
@@ -20,63 +24,77 @@ func AddTask(task *Task) (int64, error) {
 	return id, nil
 }
 
+// функция для возврата всех предстоящих задач
 func GetTasks() ([]Task, error) {
+	// SQL-запрос в БД
 	query := `SELECT * FROM scheduler ORDER BY date`
+	// выполнение SQL-запроса
 	rows, err := DB.Query(query)
 	if err != nil {
 		return nil, err
 	}
+	// закрытие rows после обработки
 	defer rows.Close()
-
+	// список задач для возврата из функции
 	tasks := make([]Task, 0)
+	// перебор полученых строк, создание объекта Task для каждой строки
 	for rows.Next() {
 		var task Task
 		var id int64
+		// заполнение полей задачи
 		err := rows.Scan(&id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 		if err != nil {
 			return nil, err
 		}
+		// перевод id в строковый формат
 		task.ID = strconv.FormatInt(id, 10)
+		// добавление задачи в результирующий слайс
 		tasks = append(tasks, task)
 	}
 	err = rows.Err()
 	if err != nil {
 		return nil, err
 	}
+	// возврат результирующего слайса
 	return tasks, nil
 }
 
+// функция для добавления задачи
 func GetTask(id int64) (Task, error) {
 	var task Task
-	var id64 int64
-	err := DB.QueryRow("SELECT * FROM scheduler WHERE id = ?", id).Scan(&id64, &task.Date, &task.Title, &task.Comment, &task.Repeat)
+	// выполнение запроса в БД по полю id
+	err := DB.QueryRow("SELECT * FROM scheduler WHERE id = ?", id).Scan(&id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
 		return task, err
 	}
-	task.ID = strconv.FormatInt(id64, 10)
+	// перевод int64 в строковый формат для записи в task
+	task.ID = strconv.FormatInt(id, 10)
 	return task, nil
 }
 
+// функция для изменения задачи
 func UpdateTask(task Task) error {
+	// перевод id в формат int64 для запроса в БД
 	id, err := strconv.ParseInt(task.ID, 10, 64)
 	if err != nil {
 		return errors.New("Неверный ID")
 	}
-
+	// проверка даты / запись нового значения даты
 	if task.Date == "" || task.Date == "today" {
 		task.Date = time.Now().Format(DateFormat)
 	} else {
+		// проверка формата даты
 		_, err := time.Parse(DateFormat, task.Date)
 		if err != nil {
 			return errors.New("Неверный формат даты")
 		}
 	}
-
+	// сравнение вычисленной даты с текущей
 	today := time.Now().Format(DateFormat)
 	if task.Date < today {
 		task.Date = today
 	}
-
+	// выполенение SQL-запроса на изменение текущей задачи
 	_, err = DB.Exec(
 		"UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?",
 		task.Date, task.Title, task.Comment, task.Repeat, id,
@@ -87,7 +105,9 @@ func UpdateTask(task Task) error {
 	return nil
 }
 
+// функция для удаления записи из БД
 func DeleteTask(id int64) error {
+	// выполнение SQL-запроса на удаление
 	_, err := DB.Exec("DELETE FROM scheduler WHERE id = ?", id)
 	if err != nil {
 		return errors.New("Ошибка удваления задачи")
