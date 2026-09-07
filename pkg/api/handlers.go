@@ -126,10 +126,11 @@ func getTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			writeError(w, "Задача не найдена")
+			return
 		} else {
 			writeError(w, "Ошибка получения задачи")
+			return
 		}
-		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(task)
@@ -149,6 +150,25 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 			writeError(w, "Неверное правило повторения")
 			return
 		}
+	}
+	id, err := strconv.ParseInt(task.ID, 10, 64)
+	if err != nil {
+		writeError(w, "Неверный ID")
+		return
+	}
+	_, err = db.GetTask(id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			writeError(w, "Задача не найдена")
+			return
+		} else {
+			writeError(w, "Ошибка получения задачи")
+			return
+		}
+	}
+	if task.Title == "" {
+		writeError(w, "Поле title не может быть пустым")
+		return
 	}
 	err = db.UpdateTask(task)
 	if err != nil {
