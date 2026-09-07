@@ -60,15 +60,6 @@ func nextDayHandler(w http.ResponseWriter, r *http.Request) {
 
 // этот хэндлер перенесен
 func taskAddHandler(w http.ResponseWriter, r *http.Request) {
-	//	defer func() {
-	//		if err := recover(); err != nil {
-	//			log.Printf("Panic в taskAdder: %v", err)
-	//			http.Error(w, "Внутренняя ошибка сервера", http.StatusInternalServerError)
-	//			//resp := db.ErrorAdderResponse{Error: "Внутренняя ошибка сервера"}
-	//			writeError(w, "Внутренняя ошибка сервера")
-	//			return
-	//		}
-	//	}()
 
 	var task db.Task
 
@@ -191,42 +182,22 @@ func getTaskHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(task)
 }
 
+// хендлер перенесен
 func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
+	// (Опционально) Проверка метода
+	if r.Method != http.MethodPut && r.Method != http.MethodPost {
+		http.Error(w, "Метод не разрешен", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Декодирование JSON
 	var task db.Task
 	err := json.NewDecoder(r.Body).Decode(&task)
 	if err != nil {
 		writeError(w, "Неверный формат JSON")
 		return
 	}
-	if task.ID == "" {
-		writeError(w, "ID не указан")
-		return
-	}
-	id, err := strconv.ParseInt(task.ID, 10, 64)
-	if err != nil {
-		writeError(w, "Неверный ID")
-		return
-	}
 
-	var exists bool
-	err = db.DB.QueryRow("SELECT EXISTS(SELECT 1 FROM scheduler WHERE id = ?)", id).Scan(&exists)
-	if err != nil || !exists {
-		writeError(w, "Задача не найдена")
-		return
-	}
-
-	if task.Title == "" {
-		writeError(w, "Заголовок не может быть пустым")
-		return
-	}
-	if task.Date == "" || task.Date == "today" {
-		task.Date = time.Now().Format("20060102")
-	} else {
-		if _, err := time.Parse("20060102", task.Date); err != nil {
-			writeError(w, "Неверный формат даты")
-			return
-		}
-	}
 	if task.Repeat != "" {
 		if _, err := nextDate(time.Now(), task.Date, task.Repeat); err != nil {
 			writeError(w, "Неверное правило повторения")
@@ -234,25 +205,19 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Автокоррекция даты в прошлом на сегодняшнюю
-	today := time.Now().Format("20060102")
-	if task.Date < today {
-		task.Date = today
-	}
-
-	_, err = db.DB.Exec(
-		"UPDATE scheduler SET date = ?, title = ?, comment = ?, repeat = ? WHERE id = ?",
-		task.Date, task.Title, task.Comment, task.Repeat, id,
-	)
+	// Вызов функции обновления
+	err = db.UpdateTask(task)
 	if err != nil {
-		writeError(w, "Ошибка обновления задачи")
+		writeError(w, err.Error())
 		return
 	}
 
+	// Успешный ответ
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{})
 }
 
+// HTTP-обработчик, который вызывает функцию БД
 func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Метод не разрешен", http.StatusMethodNotAllowed)
@@ -269,37 +234,20 @@ func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var task db.Task
-	var id64 int64
-	err = db.DB.QueryRow(
-		"SELECT id, date, title, comment, repeat FROM scheduler WHERE id = ?",
-		id,
-	).Scan(&id64, &task.Date, &task.Title, &task.Comment, &task.Repeat)
-	if err == sql.ErrNoRows {
-		writeError(w, "Задача не найдена")
-		return
-	}
-	if err != nil {
-		writeError(w, "Ошибка получения задачи")
-		return
-	}
+	task, err := db.GetTask(id)
 
 	if task.Repeat == "" {
-		_, err = db.DB.Exec("DELETE FROM scheduler WHERE id = ?", id)
-		if err != nil {
-			writeError(w, "Ошибка удаления задачи")
-			return
-		}
+		db.DeleteTask(id)
 	} else {
-		//now := time.Now().Format("20060102")
 		nextDate, err := nextDate(time.Now(), task.Date, task.Repeat)
 		if err != nil {
 			writeError(w, "Ошибка вычисления следующей даты")
 			return
 		}
-		_, err = db.DB.Exec("UPDATE scheduler SET date = ? WHERE id = ?", nextDate, id)
+		task.Date = nextDate
+		err = db.UpdateTask(task)
 		if err != nil {
-			writeError(w, "Ошибка обновления задачи")
+			writeError(w, "Ошибка обновления даты")
 			return
 		}
 	}
@@ -319,16 +267,9 @@ func deleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Неверный ID")
 		return
 	}
-	result, err := db.DB.Exec("DELETE FROM scheduler WHERE id = ?", id)
-	if err != nil {
-		writeError(w, "Ошибка удаления задачи")
-		return
-	}
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		writeError(w, "Задача не найдена")
-		return
-	}
+
+	err = db.DeleteTask(id)
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{})
 }

@@ -38,7 +38,6 @@ func Init(dbName string) error {
 		log.Fatal("Ошибка создания (открытия) базы данных:", err)
 		return err
 	}
-	//defer DB.Close()
 
 	err = DB.Ping()
 	if err != nil {

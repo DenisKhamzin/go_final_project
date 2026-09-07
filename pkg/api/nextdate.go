@@ -9,6 +9,7 @@ import (
 )
 
 func nextDate(now time.Time, dstart string, repeat string) (string, error) {
+	//now := time.Now()
 	startDate, err := time.Parse("20060102", dstart)
 	if err != nil {
 		log.Printf("Неверный формат dstart: %v", err)
