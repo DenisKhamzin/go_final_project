@@ -15,6 +15,7 @@ func main() {
 	dbFile := "scheduler.db"
 	// инициация БД
 	err := db.Init(dbFile)
+	defer db.DB.Close()
 	if err != nil {
 		// здесь и далее на уровне main.go ошибки огируются консоли
 		log.Fatal("Ошибка создания (открытия) Базы Данных:", err)

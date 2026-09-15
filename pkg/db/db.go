@@ -2,7 +2,7 @@ package db
 
 import (
 	"database/sql"
-	"errors"
+	"fmt"
 	"os"
 
 	_ "modernc.org/sqlite"
@@ -15,7 +15,7 @@ const DateFormat string = "20060102"
 var schema string = `CREATE TABLE IF NOT EXISTS scheduler (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		date CHAR(8) NOT NULL DEFAULT "",
-		title VARCHAR DAFAULT "",
+		title VARCHAR DEFAULT "",
 		comment TEXT DEFAULT "",
 		repeat VARCHAR(128) DEFAULT "");`
 
@@ -43,26 +43,29 @@ func Init(dbName string) error {
 	if err != nil {
 		install = true
 	}
+	// создание таблицы  и индекса в БД в случае их отсутствия
+	if install == true {
+		_, err = DB.Exec(schema)
+		if err != nil {
+			return fmt.Errorf("Ошибка создания таблицы: %w", err)
+		}
+		_, err = DB.Exec(index)
+		if err != nil {
+			return fmt.Errorf("Ошибка создания индекса: %w", err)
+		}
+		// закрытие соединения с созданной БД
+		DB.Close()
+	}
+
 	DB, err = sql.Open("sqlite", dbName)
 	if err != nil {
-		return errors.New("Ошибка создания (открытия) базы данных:")
+		return fmt.Errorf("Ошибка создания (открытия) базы данных: %w", err)
 	}
 	// проверка подлючения к БД
 	err = DB.Ping()
 	if err != nil {
-		return errors.New("Ошибка подключения к БД:")
+		return fmt.Errorf("Ошибка подключения к БД: %w", err)
 	}
-	// создание таблицы и индекса в случае, если install == true
-	if install == true {
-		_, err = DB.Exec(schema)
-		if err != nil {
-			return errors.New("Ошибка создания таблицы:")
-		}
-		_, err = DB.Exec(index)
-		if err != nil {
-			return errors.New("Ошибка создания индекса:")
-		}
-	}
-	// все возможные ошибки уже обработаны
+	// все ошибки уже обработаны
 	return nil
 }
