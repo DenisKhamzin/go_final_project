@@ -24,7 +24,7 @@ func AddTask(task *Task) (int64, error) {
 }
 
 // функция для возврата всех предстоящих задач
-func GetTasks() ([]Task, error) {
+func GetTasks() ([]*Task, error) {
 	// SQL-запрос в БД
 	query := `SELECT id, title, comment, date, repeat FROM scheduler ORDER BY date LIMIT 50`
 	// выполнение SQL-запроса
@@ -35,7 +35,7 @@ func GetTasks() ([]Task, error) {
 	// закрытие rows после обработки
 	defer rows.Close()
 	// список задач для возврата из функции
-	tasks := make([]Task, 0)
+	tasks := make([]*Task, 0)
 	// перебор полученых строк, создание объекта Task для каждой строки
 	for rows.Next() {
 		var task Task
@@ -48,7 +48,7 @@ func GetTasks() ([]Task, error) {
 		// перевод id в строковый формат
 		task.ID = strconv.FormatInt(id, 10)
 		// добавление задачи в результирующий слайс
-		tasks = append(tasks, task)
+		tasks = append(tasks, &task)
 	}
 	err = rows.Err()
 	if err != nil {

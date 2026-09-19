@@ -141,7 +141,7 @@ func getTasksHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// результрующая строковая переменная в формате json
-	response := map[string][]db.Task{"tasks": tasks}
+	response := map[string][]*db.Task{"tasks": tasks}
 	w.Header().Set("Content-Type", "application/json")
 	// так как при записи http-response заголовки и статус-код уже записаны, возможная ошибка только логируется
 	err = json.NewEncoder(w).Encode(response)
