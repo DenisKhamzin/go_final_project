@@ -24,7 +24,7 @@ func nextDayHandler(w http.ResponseWriter, r *http.Request) {
 		nowTime = time.Now()
 	} else {
 		var err error
-		nowTime, err = time.Parse(db.DateFormat, nowString)
+		nowTime, err = time.Parse(DateFormat, nowString)
 		if err != nil {
 			writeError(w, "Неверный формат параметра now, ожидается YYYYMMDD", http.StatusBadRequest)
 			return
@@ -70,10 +70,10 @@ func taskAddHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// автозаполнение Date в случаях, если указано сегодняшнее число или оно не указано
 	if task.Date == "" || task.Date == "today" {
-		task.Date = time.Now().Format(db.DateFormat)
+		task.Date = time.Now().Format(DateFormat)
 	}
 	// проверка формата присланной даты
-	_, err = time.Parse(db.DateFormat, task.Date)
+	_, err = time.Parse(DateFormat, task.Date)
 	if err != nil {
 		writeError(w, "Неверный формат даты", http.StatusBadRequest)
 		return
@@ -87,7 +87,7 @@ func taskAddHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// если присланная дата уже прошла, происходит подстановка сегодняшней даты
-	today := time.Now().Format(db.DateFormat)
+	today := time.Now().Format(DateFormat)
 	if task.Date < today {
 		if task.Repeat == "" {
 			task.Date = today
@@ -189,24 +189,45 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Неверный формат JSON", http.StatusBadRequest)
 		return
 	}
-	// проверка repeat на соответствие правилам повторения
+	// проверка Title на заполненность
+	if task.Title == "" {
+		writeError(w, "Title не может быть пустым", http.StatusBadRequest)
+		return
+	}
+	// автозаполнение Date в случаях, если указано сегодняшнее число или оно не указано
+	if task.Date == "" || task.Date == "today" {
+		task.Date = time.Now().Format(DateFormat)
+	}
+	// проверка формата присланной даты
+	_, err = time.Parse(DateFormat, task.Date)
+	if err != nil {
+		writeError(w, "Неверный формат даты", http.StatusBadRequest)
+		return
+	}
+	// проверка корректности полученного правила repeat функцией nextDate()
 	if task.Repeat != "" {
-		now := time.Now()
-		_, err := nextDate(now, task.Date, task.Repeat)
+		_, err := nextDate(time.Now(), task.Date, task.Repeat)
 		if err != nil {
 			writeError(w, "Неверное правило повторения", http.StatusBadRequest)
 			return
+		}
+	}
+	// если присланная дата уже прошла, происходит подстановка сегодняшней даты
+	today := time.Now().Format(DateFormat)
+	if task.Date < today {
+		if task.Repeat == "" {
+			task.Date = today
+		} else {
+			task.Date, err = nextDate(time.Now(), task.Date, task.Repeat)
+			if err != nil {
+				writeError(w, "Ошибка вычисления даты", http.StatusInternalServerError)
+			}
 		}
 	}
 	// перевод строки с id в формат int64
 	id, err := strconv.ParseInt(task.ID, 10, 64)
 	if err != nil {
 		writeError(w, "Неверный ID", http.StatusBadRequest)
-		return
-	}
-	// проверка поля title нулевое значение
-	if task.Title == "" {
-		writeError(w, "Поле title не может быть пустым", http.StatusBadRequest)
 		return
 	}
 	// после проверки всех полей необходимо проверить, есть ли в БД задача с соотвествующим id

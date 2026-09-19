@@ -6,14 +6,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/deniskhamzin/go_final_project/pkg/db"
 )
 
 // функция для вычисления следующей даты согласно правилам repeat
 func nextDate(now time.Time, dstart string, repeat string) (string, error) {
 	// проверяем на корректность входящую строку dstart
-	startDate, err := time.Parse(db.DateFormat, dstart)
+	startDate, err := time.Parse(DateFormat, dstart)
 	if err != nil {
 		log.Printf("Неверный формат dstart: %v", err)
 		return "", errors.New("неверный формат даты")
@@ -45,7 +43,7 @@ func nextDate(now time.Time, dstart string, repeat string) (string, error) {
 			startDate = startDate.AddDate(1, 0, 0)
 		}
 		// возврат next date в виде строки
-		nextDate := startDate.Format(db.DateFormat)
+		nextDate := startDate.Format(DateFormat)
 		return nextDate, nil
 	}
 	// вычисление следующей даты по правилу для "d"
@@ -72,7 +70,7 @@ func nextDate(now time.Time, dstart string, repeat string) (string, error) {
 			startDate = startDate.AddDate(0, 0, num)
 		}
 		// возврат next date в виде строки
-		nextDate := startDate.Format(db.DateFormat)
+		nextDate := startDate.Format(DateFormat)
 		return nextDate, nil
 	}
 	// возврат ошибки в случае некорретного repeat

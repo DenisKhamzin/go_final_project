@@ -8,9 +8,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// константа для перевода формата времени в строку и в time.Time
-const DateFormat string = "20060102"
-
 // SQL-запрос для добавления новой таблицы
 var schema string = `CREATE TABLE IF NOT EXISTS scheduler (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,

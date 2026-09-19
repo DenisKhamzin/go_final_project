@@ -3,7 +3,6 @@ package db
 import (
 	"errors"
 	"strconv"
-	"time"
 )
 
 // функция для добавления задачи
@@ -78,21 +77,6 @@ func UpdateTask(task Task) error {
 	id, err := strconv.ParseInt(task.ID, 10, 64)
 	if err != nil {
 		return errors.New("Неверный ID")
-	}
-	// проверка даты / запись нового значения даты
-	if task.Date == "" || task.Date == "today" {
-		task.Date = time.Now().Format(DateFormat)
-	} else {
-		// проверка формата даты
-		_, err := time.Parse(DateFormat, task.Date)
-		if err != nil {
-			return errors.New("Неверный формат даты")
-		}
-	}
-	// сравнение вычисленной даты с текущей
-	today := time.Now().Format(DateFormat)
-	if task.Date < today {
-		task.Date = today
 	}
 	// выполенение SQL-запроса на изменение текущей задачи
 	_, err = DB.Exec(

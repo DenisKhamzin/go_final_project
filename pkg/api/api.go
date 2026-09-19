@@ -2,6 +2,9 @@ package api
 
 import "net/http"
 
+// константа для перевода формата времени в строку и в time.Time
+const DateFormat string = "20060102"
+
 // регистрация хендлеров для каждого эндпоинта
 func Init(mux *http.ServeMux) {
 	mux.HandleFunc("/api/nextdate", nextDayHandler)   // ожидаем метод GET
