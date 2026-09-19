@@ -38,7 +38,6 @@ func nextDayHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if repeat == "" {
-		//w.WriteHeader(http.StatusOK)
 		writeError(w, "Не указан repeat", http.StatusBadRequest)
 		return
 	}
@@ -106,11 +105,12 @@ func taskAddHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Ошибка добавления задачи", http.StatusInternalServerError)
 		return
 	}
+	idString := strconv.Itoa(int(id))
 	// запись json с id добавленной задачи в случае успешнгого добавления
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusOK)
 	// так как при записи http-response заголовки и статус-код уже записаны, ошибка только логируется
-	err = json.NewEncoder(w).Encode(map[string]int64{"id": id})
+	err = json.NewEncoder(w).Encode(map[string]string{"id": idString})
 	if err != nil {
 		log.Println("Ошибка сериализации json для ответа", err)
 	}
@@ -143,7 +143,7 @@ func getTasksHandler(w http.ResponseWriter, r *http.Request) {
 	// результрующая строковая переменная в формате json
 	response := map[string][]db.Task{"tasks": tasks}
 	w.Header().Set("Content-Type", "application/json")
-	// так как при записи http-response заголовки и статус-код уже записаны, ошибка только логируется
+	// так как при записи http-response заголовки и статус-код уже записаны, возможная ошибка только логируется
 	err = json.NewEncoder(w).Encode(response)
 	if err != nil {
 		log.Println("Ошибка сериализации json для ответа: ", err)
