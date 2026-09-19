@@ -79,18 +79,24 @@ func taskAddHandler(w http.ResponseWriter, r *http.Request) {
 		writeError(w, "Неверный формат даты", http.StatusBadRequest)
 		return
 	}
-	// если присланная дата уже прошла, происходит подстановка сегодняшней даты
-	today := time.Now().Format(db.DateFormat)
-	if task.Date < today {
-		task.Date = today
-	}
 	// проверка корректности полученного правила repeat функцией nextDate()
 	if task.Repeat != "" {
-		now := time.Now()
-		_, err := nextDate(now, task.Date, task.Repeat)
+		_, err := nextDate(time.Now(), task.Date, task.Repeat)
 		if err != nil {
 			writeError(w, "Неверное правило повторения", http.StatusBadRequest)
 			return
+		}
+	}
+	// если присланная дата уже прошла, происходит подстановка сегодняшней даты
+	today := time.Now().Format(db.DateFormat)
+	if task.Date < today {
+		if task.Repeat == "" {
+			task.Date = today
+		} else {
+			task.Date, err = nextDate(time.Now(), task.Date, task.Repeat)
+			if err != nil {
+				writeError(w, "Ошибка вычисления даты", http.StatusInternalServerError)
+			}
 		}
 	}
 	// вызов функции для добавления задачи в БД
