@@ -26,7 +26,7 @@ func AddTask(task *Task) (int64, error) {
 // функция для возврата всех предстоящих задач
 func GetTasks() ([]*Task, error) {
 	// SQL-запрос в БД
-	query := `SELECT id, title, comment, date, repeat FROM scheduler ORDER BY date LIMIT 50`
+	query := `SELECT id, date, title, comment, repeat FROM scheduler ORDER BY date LIMIT 50`
 	// выполнение SQL-запроса
 	rows, err := DB.Query(query)
 	if err != nil {
@@ -91,13 +91,8 @@ func UpdateTask(task Task) error {
 
 // функция для удаления записи из БД
 func DeleteTask(id int64) error {
-	// проверка существования задачи с данным id
-	_, err := GetTask(id)
-	if err != nil {
-		return errors.New("Задача с данным id отсутсвует")
-	}
 	// выполнение SQL-запроса на удаление
-	_, err = DB.Exec("DELETE FROM scheduler WHERE id = ?", id)
+	_, err := DB.Exec("DELETE FROM scheduler WHERE id = ?", id)
 	if err != nil {
 		return errors.New("Ошибка удваления задачи")
 	}

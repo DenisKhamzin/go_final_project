@@ -16,6 +16,7 @@ import (
 func nextDayHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeError(w, "Метод не поддерживается", http.StatusMethodNotAllowed)
+		return
 	}
 	nowString := r.URL.Query().Get("now")
 	// переменная для отправки в функцию nextDate()
@@ -44,7 +45,7 @@ func nextDayHandler(w http.ResponseWriter, r *http.Request) {
 	// вызов функции nextDate() с полученными аргументами
 	result, err := nextDate(nowTime, date, repeat)
 	if err != nil {
-		writeError(w, "Ошибка в вычислении next date", http.StatusInternalServerError)
+		writeError(w, "Ошибка в вычислении next date", http.StatusBadRequest)
 		return
 	}
 	// запись результата в тело ответа
@@ -95,6 +96,7 @@ func taskAddHandler(w http.ResponseWriter, r *http.Request) {
 			task.Date, err = nextDate(time.Now(), task.Date, task.Repeat)
 			if err != nil {
 				writeError(w, "Ошибка вычисления даты", http.StatusInternalServerError)
+				return
 			}
 		}
 	}
@@ -118,13 +120,13 @@ func taskAddHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // вспомогательная функция для записи в ответ json с ошибкой
-func writeError(w http.ResponseWriter, err string, status int) {
+func writeError(w http.ResponseWriter, errorString string, status int) {
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(status)
 	// так как при записи http-response заголовок и статус-код уже записаны, ошибка только логируется
-	errJson := json.NewEncoder(w).Encode(map[string]string{"error": err})
-	if errJson != nil {
-		log.Println("Ошибка записи json в тело ответа при вызове writeError: ", errJson)
+	err := json.NewEncoder(w).Encode(map[string]string{"error": errorString})
+	if err != nil {
+		log.Println("Ошибка записи json в тело ответа при вызове writeError: ", err)
 	}
 }
 
@@ -168,7 +170,7 @@ func getTaskHandler(w http.ResponseWriter, r *http.Request) {
 	task, err := db.GetTask(id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, "Задача не найдена", http.StatusInternalServerError)
+			writeError(w, "Задача не найдена", http.StatusNotFound)
 			return
 		} else {
 			writeError(w, "Ошибка получения задачи", http.StatusInternalServerError)
@@ -177,7 +179,11 @@ func getTaskHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	// запись json в тело ответа в случае успешного получения задачи
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(task)
+	// так как при записи http-response заголовки и статус-код уже записаны, возможная ошибка только логируется
+	err = json.NewEncoder(w).Encode(task)
+	if err != nil {
+		log.Println("Ошибка сериализации json для ответа: ", err)
+	}
 }
 
 // хендлер для изменения задачи
@@ -221,6 +227,7 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 			task.Date, err = nextDate(time.Now(), task.Date, task.Repeat)
 			if err != nil {
 				writeError(w, "Ошибка вычисления даты", http.StatusInternalServerError)
+				return
 			}
 		}
 	}
@@ -233,7 +240,7 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	// после проверки всех полей необходимо проверить, есть ли в БД задача с соотвествующим id
 	_, err = db.GetTask(id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, "Задача не найдена", http.StatusInternalServerError)
 			return
 		} else {
@@ -274,7 +281,7 @@ func doneTaskHandler(w http.ResponseWriter, r *http.Request) {
 	// получение задачи по id для проверки параметров repeat
 	task, err := db.GetTask(id)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, "Задача не найдена", http.StatusInternalServerError)
 			return
 		} else {
