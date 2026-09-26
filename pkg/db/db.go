@@ -2,7 +2,9 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 
 	_ "modernc.org/sqlite"
@@ -32,37 +34,44 @@ type Task struct {
 }
 
 // функция для инициации БД
-// на этом уровне
 func Init(dbName string) error {
-	// проверяем наличие файла БД
-	_, err := os.Stat(dbName)
+	// булевая переменная для необходимости создания таблицы и индекса
 	install := false
-	if err != nil {
+	// проверка существования файла в корне проекта
+	_, err := os.Stat(dbName)
+	// в случае, если файл не найден, начение переменной install меняется на true
+	if errors.Is(err, fs.ErrNotExist) {
 		install = true
 	}
-	// создание таблицы  и индекса в БД в случае их отсутствия
-	if install == true {
-		_, err = DB.Exec(schema)
-		if err != nil {
-			return fmt.Errorf("Ошибка создания таблицы: %w", err)
-		}
-		_, err = DB.Exec(index)
-		if err != nil {
-			return fmt.Errorf("Ошибка создания индекса: %w", err)
-		}
-		// закрытие соединения с созданной БД
-		DB.Close()
-	}
-
+	// подготовка структуры для работы с БД
 	DB, err = sql.Open("sqlite", dbName)
 	if err != nil {
-		return fmt.Errorf("Ошибка создания (открытия) базы данных: %w", err)
+		return fmt.Errorf("Ошибка открытия базы данных: %w", err)
 	}
-	// проверка подлючения к БД
+	// установка соединения (и создание файла БД, если его не было)
 	err = DB.Ping()
 	if err != nil {
-		return fmt.Errorf("Ошибка подключения к БД: %w", err)
+		// в случае ошибки соединение принудительно закрывается
+		DB.Close()
+		return fmt.Errorf("Ошибка подключения к базе данных: %w", err)
 	}
-	// все ошибки уже обработаны
+	// Если файла раньше не было - создаем таблицу и индекс
+	if install == true {
+		// попытка создания таблицы
+		_, err = DB.Exec(schema)
+		if err != nil {
+			// в случае ошибки соединение принудительно закрывается
+			DB.Close()
+			return fmt.Errorf("Ошибка создания таблицы: %w", err)
+		}
+		// попытка создания индекса
+		_, err = DB.Exec(index)
+		if err != nil {
+			// в случае ошибки соединение принудительно закрывется
+			DB.Close()
+			return fmt.Errorf("Ошибка создания индекса: %w", err)
+		}
+	}
+	// если ошибок при инициализации не возникает, соединение остается открытым
 	return nil
 }
